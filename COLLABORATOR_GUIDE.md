@@ -8,15 +8,19 @@
   - [Adding new pages](#adding-new-pages)
     - [Create the page content](#create-the-page-content)
   - [Translating pages](#translating-pages)
-- [Creating Components](#creating-components)
+- [Creating Components](#creating-react-components)
   - [Styling a Component](#styling-a-component)
   - [Best practices when creating a Component](#best-practices-when-creating-a-component)
     - [How a new Component should look like when freshly created](#how-a-new-component-should-look-like-when-freshly-created)
   - [Best practices for Component development in general](#best-practices-for-component-development-in-general)
+- [The new Downloads page](#the-new-downloads-page)
+  - [Adding a Download Installation Method](#adding-a-download-installation-method)
+  - [Adding a Download Package Manager](#adding-a-download-package-manager)
 - [Unit Tests and Storybooks](#unit-tests-and-storybooks)
   - [General Guidelines for Unit Tests](#general-guidelines-for-unit-tests)
   - [General Guidelines for Storybooks](#general-guidelines-for-storybooks)
 - [Remarks on Technologies used](#remarks-on-technologies-used)
+- [Seeking additional clarification](#seeking-additional-clarification)
 
 This document contains information for Collaborators of the Node.js website project regarding maintaining the code, documentation, and issues.
 
@@ -56,7 +60,7 @@ We recommend collaborators follow the guidelines on the [Contributing Guide](./C
 
 ### Involving the Website Team
 
-Collaborators may opt to elevate pull requests or issues to the group for discussion by mentioning `@nodejs/website`. This should be done where a pull request:
+Collaborators may opt to elevate pull requests or issues to the group for discussion by mentioning `@nodejs/nodejs-website`. This should be done where a pull request:
 
 - has a significant impact on the codebase,
 - is inherently controversial; or
@@ -78,10 +82,13 @@ The Website also uses several other Open Source libraries (not limited to) liste
     - [PostCSS Simple Vars](https://github.com/postcss/postcss-simple-vars)
 - [Tailwind][] is used as our CSS Framework and the Foundation of our Design System
 - [Hero Icons](https://heroicons.com/) is an SVG Icon Library used within our Codebase
+- [Radix UI][] is a collection of customizable UI components
 - [Shiki][] is a Syntax Highlighter used for our Codeboxes
-  - A [Rehype Plugin](https://rehype-pretty-code.netlify.app/) is used here for transforming `pre` and `code` tags into Syntax Highlighted Codeboxes
+  - The syntax highlighting is done within the processing of the Markdown files with the MDX compiler as a Rehype plugin.
 - [MDX][] and Markdown are used for structuring the Content of the Website
-- [`react-intl`][] is the i18n Library adopted within the Website
+- [`next-intl`][] is the i18n Library adopted within the Website
+  - It provides an excellent integration with Next.js, But it also supports standalone support for i18n if it eventually migrates from Next.js to something else.
+  - Supports React Server Components and Next.js Middlewares
 - [`next-sitemap`](https://www.npmjs.com/package/next-sitemap) is used for Sitemap and `robots.txt` Generation
 - We use [Rehype](https://github.com/rehypejs/rehype) and [Remark](https://github.com/remarkjs/remark) to extend MDX functionality
 - We use [Storybook](https://storybook.js.org/) for Manual Testing and Visual Regression Tests of our React Components
@@ -91,55 +98,59 @@ The Website also uses several other Open Source libraries (not limited to) liste
 
 ### Structure of this Repository
 
-- React Components are defined on `/components`
-- React Templates are defined on `/layouts`
-- Global Stylesheets are declared on `/styles`
+⚠️ The repository is actively under migration to a multi-package workspace.
+Locations are subject to change. (If you are someone updating these paths,
+please document those changes here.)
+
+- React Components are defined on `apps/site/components`
+- React Templates are defined on `apps/site/layouts`
+- Global Stylesheets are declared on `apps/site/styles`
   - Styles are done with [PostCSS][]
-- Public files are stored on `/public`
-  - Static Images, JavaScript files, and others are stored within `/public/static`
-- Internationalisation is done on `/i18n`
-  - React Localisation Data is stored within `/i18n/locales`
+- Public files are stored on `apps/site/public`
+  - Static Images, JavaScript files, and others are stored within `apps/site/public/static`
+- Internationalisation is done on `apps/site/i18n`
+  - React Localisation Data is stored within `apps/site/i18n/locales`
   - We use the [ICU Message Syntax](https://formatjs.io/docs/core-concepts/icu-syntax/) for Translations
-  - Configuration for Locales is done within `/i18n/config.json`
-- Website Content is defined within `/pages`
-  - Initial development usually happens in English: `/pages/en`
-  - Localized versions of `/pages/en` are done within `/pages/{localeCode}`
+  - Configuration for Locales is done within `apps/site/i18n/config.json`
+- Website Content is defined within `apps/site/pages`
+  - Initial development usually happens in English: `apps/site/pages/en`
+  - Localized versions of `/pages/en` are done within `apps/site/pages/{localeCode}`
   - All content is in Markdown and is per locale.
   - The top of each Markdown file is a YAML (Frontmatter) block for page-specific localization information passed to various templates.
-  - The bulk of the Markdown content for each page is referenced as `{children}` on their respective JSX Layout (`layouts/`)
-- Multi-Purpose React Hooks are defined on `/hooks`
-- Multi-Purpose TypeScript definitions are defined on `/types`
-- React Context Providers are defined on `/providers`
-- Build-time Data Fetching Scripts are defined on `/next-data`
+  - The bulk of the Markdown content for each page is referenced as `{children}` on their respective JSX Layout (`apps/site/layouts/`)
+- Multi-Purpose React Hooks are defined on `apps/site/hooks`
+- Multi-Purpose TypeScript definitions are defined on `apps/site/types`
+- React Context Providers are defined on `apps/site/providers`
+- Build-time Data Fetching Scripts are defined on `apps/site/next-data`
   - Used for Node.js Release data fetching
   - Generation of build-time indexes such as blog data
-- Multi-Purpose Scripts are stored within `/scripts`
+- Multi-Purpose Scripts are stored within `apps/site/scripts`
   - Such as Node.js Release Blog Post generation
-- Storybook Configuration is done within `/.storybook`
+- Storybook Configuration is done within `apps/site/.storybook`
   - We use an almost out-of-the-box Storybook Experience with a few extra customisations
 
 ### Adding new Pages
 
 1. Create new page content including the layout, title and copy.
-2. Update the relevant `/layout` to add a link to the new page.
+2. Update the relevant `apps/site/layout` to add a link to the new page.
 
 #### Create the page content
 
-Create a new markdown file in `/pages/en`.
+Create a new markdown file in `apps/site/pages/en`.
 
 At the top of the markdown file, within the Markdown Frontmatter, set a page the title and layout.
 
 ```markdown
 ---
 title: Title of the Page
-layout: layout-name.hbs
+layout: layout-name
 ---
 
 [Content of the Page]
 ```
 
 > \[!NOTE]\
-> A list of currently available Layouts is provided within `providers/layoutProvider` on the `getLegacyProviders` map.\
+> A list of currently available Layouts is provided within `components/withLayout` on the `layoutComponents` map.\
 > This is a temporary map and this map might change its location and be defined in a different way in the future.
 
 ### Translating Pages
@@ -187,24 +198,24 @@ Finally, if you're unfamiliar with how to use Tailwind or how to use Tailwind wi
   - We require that you define one Tailwind Token per line, just as shown on the example above, since this improves readability
 - Only write CSS within CSS Modules, avoid writing CSS within JavaScript files
 - We recommend creating mixins for reusable animations, effects and more
-  - You can create Mixins within the `styles/mixins` folder
+  - You can create Mixins within the `apps/site/styles/mixins` folder
 
 > \[!NOTE]\
 > Tailwind is already configured for this repository. You don't need to import any Tailwind module within your CSS module.\
 > You can apply Tailwind Tokens with Tailwind's `@apply` CSS rule. [Read more about applying Tailwind classes with `@apply`](https://tailwindcss.com/docs/functions-and-directives#apply).
 
 > \[!IMPORTANT]\
-> When using IDEs such as Visual Studio Code, we recommend installing the official [Stylelint](https://marketplace.visualstudio.com/items?itemName=bradlc.vscode-tailwindcss)
-> and [Tailwind](https://marketplace.visualstudio.com/items?itemName=stylelint.vscode-stylelint) Extensions.\
+> When using IDEs such as Visual Studio Code, we recommend installing the official [Stylelint](https://marketplace.visualstudio.com/items?itemName=stylelint.vscode-stylelint)
+> and [Tailwind](https://marketplace.visualstudio.com/items?itemName=bradlc.vscode-tailwindcss) Extensions.\
 > These are recommended Extensions for IntelliSense, Syntax Highlighting and Error Checking when styling your Component.
 
 ### Best practices when creating a Component
 
-- All React Components should be placed within the `components` folder.
+- All React Components should be placed within the `apps/site/components` folder.
 - Each Component should be placed, whenever possible, within a sub-folder, which we call the "Domain" of the Component
   - The domain represents where these Components belong to or where they will be used.
   - For example, Components used within Article Pages or that are part of the structure of an Article or the Article Layouts,
-    should be placed within `components/Article`
+    should be placed within `apps/site/components/Article`
 - Each component should have its folder with the name of the Component
 - The structure of each component folder follows the following template:
   ```text
@@ -244,12 +255,123 @@ export default MyComponent;
 - When importing types, use `import type { NameOfImport } from 'module'`
 - When defining a Component, use the `FC` type from React to define the type of the Component
   - When using `children` as a prop, use the `FC<PropsWithChildren<MyComponentProps>>` type instead
-  - Alterenatively you can define your type as `type MyComponentProps = PropsWithChildren<{ my other props}>`
+  - Alternatively you can define your type as `type MyComponentProps = PropsWithChildren<{ my other props }>`
 - Each Props type should be prefixed by the name of the Component
 - Components should always be the `default` export of a React Component file
 - Avoid using DOM/Web APIs/`document`/`window` API access within a React Component.
   Use utilities or Hooks when you need a Reactive state
 - Avoid making your Component too big. Deconstruct it into smaller Components/Hooks whenever possible
+
+## The new Downloads page
+
+### Adding a Download Installation Method
+
+To add a new download installation method, follow these steps:
+
+1. **Update `INSTALL_METHODS` in `apps/site/util/downloadUtils.tsx`:**
+
+   - Add a new entry to the `INSTALL_METHODS` array.
+   - Each entry should have the following properties:
+     - `iconImage`: The React component of the icon image for the installation method. This should be an SVG component stored within `apps/site/components/Icons/InstallationMethod` and must follow the other icon component references (being a `FC` supporting `SVGSVGElement` props).
+       - Don't forget to add it on the `index.tsx` file from the `InstallationMethod` folder.
+     - `recommended`: A boolean indicating if this method is recommended. This property is available only for official installation methods.
+     - `url`: The URL for the installation method.
+     - `value`: The key of the installation method, which must be unique.
+
+   Example:
+
+   ```javascript
+   // filepath: /nodejs.org/apps/site/util/downloadUtils.tsx
+   // See full reference of INSTALL_METHODS within `downloadUtils.tsx`
+   export const INSTALL_METHODS = [
+     // ...existing methods...
+     {
+       iconImage: <InstallMethodIcons.YourIconImage width={16} height={16} />,
+       url: 'https://example.com/install',
+       value: 'exampleMethod',
+     },
+   ];
+   ```
+
+2. **Add translation key in `packages/i18n/locales/en.json`:**
+
+   - Add an entry under `layouts.download.codeBox.platformInfo` for the `info` property of the new installation method.
+
+   Example:
+
+   ```json
+   // filepath: /nodejs.org/packages/i18n/locales/en.json
+   {
+     "layouts": {
+       "download": {
+         "codeBox": {
+           "platformInfo": {
+             "exampleMethod": "Example installation method description."
+           }
+         }
+       }
+     }
+   }
+   ```
+
+3. **Update `InstallationMethodLabel` and `InstallationMethod` in `@/types/release.ts`:**
+
+   - Add the new method to the `InstallationMethodLabel` and `InstallationMethod` types.
+
+   Example:
+
+   ```typescript
+   // filepath: /nodejs.org/apps/site/types/release.ts
+   export type InstallationMethod = 'exampleMethod' | 'anotherMethod' | ...;
+
+   export const InstallationMethodLabel: Record<InstallationMethod, string> = {
+     exampleMethod: 'Example Method',
+     anotherMethod: 'Another Method',
+     // ...existing methods...
+   };
+   ```
+
+4. **Add a snippet in `apps/site/snippets/en/download`:**
+
+   - Create a new file with the same key as the `value` property (e.g., `exampleMethod.bash`).
+   - Add the installation instructions in this file.
+   - The snippet file can use JavaScript template syntax and has access to a `props` variable of type `ReleaseContextType`.
+
+   Example:
+
+   ```bash
+   // filepath: /nodejs.org/apps/site/snippets/en/download/exampleMethod.bash
+   echo "Installing Node.js version ${props.version} using Example Method"
+   ```
+
+5. **Configure `compatibility` within the `INSTALL_METHODS` object in `downloadUtils.ts`:**
+
+- Use the `compatibility` property to enable/list the installation method for specific OSs, Node.js version ranges, or architectures/platforms.
+
+Example:
+
+```javascript
+// filepath: /nodejs.org/apps/site/util/downloadUtils.tsx
+// See full reference of compatibility property within `downloadUtils.tsx`
+export const INSTALL_METHODS = [
+  {
+    iconImage: 'path/to/icon.svg',
+    url: 'https://example.com/install',
+    value: 'exampleMethod',
+    compatibility: {
+      os: ['LINUX', 'MAC'],
+      semver: ['>=14.0.0'],
+      platform: ['x64', 'arm64'],
+    },
+  },
+];
+```
+
+By following these steps, you can successfully add a new download installation method to the Node.js website.
+
+### Adding a Download Package Manager
+
+You can add a PACKAGE_MANAGER the same way as adding an INSTALLATION_METHOD (from the section above, "Adding a Download Installation Method") but it should be added to the PACKAGE_MANAGERS object in `apps/site/util/downloadUtils.tsx`.
 
 ## Unit Tests and Storybooks
 
@@ -272,7 +394,7 @@ Unit Tests are fundamental to ensure that code changes do not disrupt the functi
 - We also recommend mocking external dependencies, if unsure about how to mock a particular dependency, raise the question on your Pull Request.
   - We recommend using [Jest's Mock Functions](https://jestjs.io/docs/en/mock-functions) for mocking dependencies.
   - We recommend using [Jest's Mock Modules](https://jestjs.io/docs/en/manual-mocks) for mocking dependencies unavailable on the Node.js runtime.
-  - Common Providers and Contexts from the lifecycle of our App, such as [`react-intl`][] should not be mocked but given an empty or fake context whenever possible.
+  - Common Providers and Contexts from the lifecycle of our App, such as [`next-intl`][] should not be mocked but given an empty or fake context whenever possible.
 - We recommend reading previous unit tests from the codebase for inspiration and code guidelines.
 
 ### General Guidelines for Storybooks
@@ -285,12 +407,12 @@ They also allow Developers to preview Components and be able to test them manual
 
 ```tsx
 import type { Meta as MetaObj, StoryObj } from '@storybook/react';
-import NameOfComponent from './index';
+import NameOfComponent from '@components/PathTo/YourComponent';
 
 type Story = StoryObj<typeof NameOfComponent>;
 type Meta = MetaObj<typeof NameOfComponent>;
 
-// If the component has any props that are interactable, they should be passed here
+// If the component has any props that are interactive, they should be passed here
 // We recommend reading Storybook docs for args: https://storybook.js.org/docs/react/writing-stories/args
 export const Default: Story = {};
 
@@ -327,15 +449,15 @@ This is to ensure that the Website is always available and that we do not depend
 #### What is `next.dynamic.mjs`?
 
 Our whole Website uses a custom renderer for rendering the pages.
-As you might have seen, within the `pages` directory we have [Next.js Dynamic Route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes) named `[...path].tsx` that matches against all possible routes of the Website.
+As you might have seen, within the `apps/site/pages` directory we have [Next.js Dynamic Route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes) named `[...path].tsx` that matches against all possible routes of the Website.
 
-This means that each `.md(x)` file within `pages/` is not rendered by Next.js regular App Tree (`pages/_document.tsx` and `pages/_app.tsx`) but a custom render tree.
+This means that each `.md(x)` file within `apps/site/pages/` is not rendered by Next.js regular App Tree (`apps/site/pages/_document.tsx` and `apps/site/pages/_app.tsx`) but a custom render tree.
 
 This custom render uses `getStaticPaths` and [Incremental Static Generation](https://nextjs.org/docs/pages/building-your-application/data-fetching/incremental-static-regeneration) to generate the full list of supported pages of the Website.
 For example, this allows us to generate Localized Pages for every page that is not translated, by telling Next.js to create a localised path.
-`next.dynamic.mjs` is responsible for getting a full list of the source pages (`pages/en`) and identifying which pages have been translated.
+`next.dynamic.mjs` is responsible for getting a full list of the source pages (`apps/site/pages/en`) and identifying which pages have been translated.
 
-Non-translated pages will have their Localized contexts and translated React message-bags (`react-intl`) but the content will be the same as the source page (English).
+Non-translated pages will have their Localized contexts and translated React message-bags (`next-intl`) but the content will be the same as the source page (English).
 Whereas localized pages will have localized context and content.
 
 This custom solution is also able to decide what paths should be compiled during runtime.
@@ -384,7 +506,7 @@ They are responsible for adding additional styling and structure surrounding the
 Layouts are defined within the `layouts` folder.
 They are React Components that receive the `children` prop, which is the transformed MDX content of the Markdown file.
 
-Each Page layout is configured within their Markdown's Frontmatter as `layout: name-of-layout.hbs`.
+Each Page layout is configured within their Markdown's Frontmatter as `layout: name-of-layout`.
 
 ### How we style the Website?
 
@@ -428,26 +550,29 @@ The Node.js Website uses Tailwind as a CSS Framework for crafting our React Comp
 We use `next/fonts` Open Sans as the default font for the Node.js Website.
 The font is configured as a CSS variable and then configured on `tailwind.config.js` as the default font for the Website.
 
+#### Why we use RadixUI?
+
+- It is a minimalistic component library broken down in individual packages for each Component
+- It already handles all WAI-ARIA and Accessibility shortcuts/bindings needed for Interactive Elements
+- It allows us to focus on designing interactive Components without the effort of adding all the surrounding sugar and code needed to make the Component accessibility-friendly.
+
 ### Why MDX?
 
 MDX is an extension on Markdown that allows us to add JSX Components within Markdown.
 Besides that, MDX is also a pluggable parser built on top of `unified` which supports Rehype and Remark Plugins.
 MDX is becoming the standard for parsing human-content on React/Next.js-based Applications.
 
-Some of the plugins that we use include:
+**Some of the plugins that we use include:**
 
+- `remark-gfm`: Allows us to bring GitHub Flavoured Markdown within MDX
 - `remark-headings`: Generates Metadata for Markdown Headings
   - This allows us to build the Table of Contents for each Page, for example.
 - `rehype-autolink-headings`: Allows us to add Anchor Links to Markdown Headings
 - `rehype-slug`: Allows us to add IDs to Markdown Headings
-- `rehype-pretty-code`: Allows us to transform `pre` and `code` tags into Syntax Highlighted Codeboxes by using [Shiki][]
 
 #### Syntax Highlighting (Shiki) and Vercel
 
-Since we use Incremental Static Rendering and Serverless Functions, Vercel attempts to simplify the bundled Node.js runtime by removing all unnecessary dependencies.
-This means that Shiki's Themes and Languages are not bundled by default.
-
-Hence the `shiki.config.mjs` file, where we define our custom set of supported Languages and we bundle them directly by using [Shiki's Grammar Property](https://github.com/shikijs/shiki/blob/main/docs/languages.md#supporting-your-own-languages-with-shiki) which allows us to embed the languages directly.
+Shiki is integrated on our workflow as a Rehype Plugin, see the `next.mdx.shiki.mjs` file. We also use the `nord` theme for Shiki and a subset of the supported languages as defined on the `shiki.config.mjs` file.
 
 ### Vercel
 
@@ -461,7 +586,20 @@ It is important to mention that there are some rules on our Vercel Deployments s
   - Hence if Builds fail unexpectedly, make sure that your dependency that is being used during build-time is on `dependencies` and not `devDependencies`. Checkout out [DEPENDENCY_PINNING.md](./DEPENDENCY_PINNING.md) for more information.
 - Our sponsorship with Vercel is maintained by the OpenJS Foundation
 
-### Seeking additional clarification
+### Why we have a `.vscode` folder
+
+The repository defines an optimized configuration for code editing. This is optional and is not required to contribute to the project. However, the settings and extensions specified help create a uniform and more efficient developer experience. This configuration is found in the `.vscode` directory:
+
+- `extensions.json` suggests VSCode extensions that make the editor more compatible with the code. For example, a Tailwind extension creates auto-complete intellisense for tailwind styles within our components. Eslint, prettier, and editorconfig extensions read their respective config files and automatically format or lint code as written. This helps save CI feedback loops when a contribution does not meet our standards.
+- `settings.json` contains some common sense defaults that aide development and enforce consistency across the codebase. For example, we want files formatted on save and we want prettier to be used as the formatter. Without these settings, new contributors may have different authoring experiences when contributing, leading to inconsistent code and CI failures. We also disable VSCode's default CSS parser so PostCSS and Tailwind syntax are respected.
+
+Defining a `.vscode` configuration like this also aides browser-only development using [GitHub's Codespaces feature](https://github.com/features/codespaces). The web-based GUI will read these same configuration files and setup the remote development environment the same way every time.
+
+### Why we have an `.npmrc` file
+
+The npm ecosystem resolution and installation of `peerDependencies` installation [changed in recent versions](https://nodejs.org/en/blog/npm/peer-dependencies#using-peer-dependencies). The project documents what version of `Node.js` and `npm` to use via the [`.nvmrc` file](https://github.com/nodejs/nodejs.org/blob/main/.nvmrc). Not all contributors have tooling to automatically read this file and adhere to the correct version, however. To ensure all contributors install dependencies the same way, a local `.npmrc` file directly configures peerDependency installation behavior.
+
+## Seeking additional clarification
 
 A lot of the current structure is due to retro-compatibility, keeping a simple and familiar file structure and keeping files that have historical reasons or needs.
 
@@ -470,10 +608,11 @@ If you're unfamiliar or curious about something, we recommend opening a Discussi
 [Jest]: https://jestjs.io/
 [React Testing Library]: https://testing-library.com/docs/react-testing-library/intro/
 [Storybook]: https://storybook.js.org/
-[`react-intl`]: https://formatjs.io/docs/react-intl/
+[`next-intl`]: https://next-intl-docs.vercel.app
 [Next.js]: https://nextjs.org/
 [MDX]: https://mdxjs.com/
 [PostCSS]: https://postcss.org/
 [React]: https://react.dev/
 [Shiki]: https://github.com/shikijs/shiki
 [Tailwind]: https://tailwindcss.com/
+[Radix UI]: https://www.radix-ui.com/

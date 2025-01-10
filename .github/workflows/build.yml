@@ -45,6 +45,11 @@ jobs:
         os: [ubuntu-latest, windows-latest]
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
       - name: Provide Turborepo Arguments
         # This step is responsible for providing a reusable string that can be used within other steps and jobs
         # that use the `turbo` cli command as a way of easily providing shared arguments to the `turbo` command
@@ -60,18 +65,10 @@ jobs:
         run: echo C:\Program Files\Git\usr\bin>>"%GITHUB_PATH%"
 
       - name: Git Checkout
-        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          # Since we checkout the HEAD of the current Branch, if the Pull Request comes from a Fork
-          # we want to clone the fork's repository instead of the base repository
-          # this allows us to have the correct history tree of the perspective of the Pull Request's branch
-          # If the Workflow is running on `merge_group` or `push` events it fallsback to the base repository
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          # We checkout the branch itself instead of a specific SHA (Commit) as we want to ensure that this Workflow
-          # is always running with the latest `ref` (changes) of the Pull Request's branh
-          # If the Workflow is running on `merge_group` or `push` events it fallsback to `github.ref` which will often be `main`
-          # or the merge_group `ref`
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          # Provides the Pull Request commit SHA or the GitHub merge group ref
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.ref }}
           # We only need to fetch the last commit from the head_ref
           # since we're not using the `--filter` operation from turborepo
           # We don't use the `--filter` as we always want to force builds regardless of having changes or not
@@ -79,29 +76,27 @@ jobs:
           # regardless of having code changes or not
           fetch-depth: 1
 
-      - name: Restore Build Cache
-        uses: actions/cache/restore@704facf57e6136b1bc63b828d79edcd491f0ee84
+      - uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
         with:
+          # See here for caching with `yarn` https://github.com/actions/cache/blob/main/examples.md#node---yarn or you can leverage caching with actions/setup-node https://github.com/actions/setup-node
           path: |
-            .turbo/cache
-            .next/cache
-            node_modules/.cache
-          # We want to restore cache from local .npm caches, .next/cache and node_modules/.cache
-          # As this should reduce build times, and the overall time for installing packages or running operations
-          key: cache-build-${{ hashFiles('package-lock.json') }}-
+            ~/.npm
+            ${{ github.workspace }}/apps/site/.next/cache
+          # Generate a new cache whenever packages or source files change.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+          # If source files changed but packages didn't, rebuild from a prior cache.
           restore-keys: |
-            cache-build-${{ hashFiles('package-lock.json') }}-
-            cache-build-
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
 
       - name: Set up Node.js
-        uses: actions/setup-node@5e21ff4d9bc1a8cf6de233a3057d20ec6b3fb69d
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           # We want to ensure that the Node.js version running here respects our supported versions
           node-version-file: '.nvmrc'
           cache: 'npm'
 
-      - name: Install NPM packages
-        # We want to avoid NPM from running the Audit Step and Funding messages on a CI environment
+      - name: Install npm packages
+        # We want to avoid npm from running the Audit Step and Funding messages on a CI environment
         # We also use `npm i` instead of `npm ci` so that the node_modules/.cache folder doesn't get deleted
         # We also use `--omit=dev` to avoid installing devDependencies as we don't need them during the build step
         run: npm i --no-audit --no-fund --userconfig=/dev/null --omit=dev
@@ -116,6 +111,8 @@ jobs:
           # this should be a last resort in case by any chances the build memory gets too high
           # but in general this should never happen
           NODE_OPTIONS: '--max_old_space_size=4096'
+          # Used for API requests that require GitHub API scopes
+          NEXT_GITHUB_API_KEY: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Next.js (Static)
         # We only run full static builds within Pull Requests. As they're not needed on `merge_group` or `push` events
@@ -132,20 +129,19 @@ jobs:
           # this should be a last resort in case by any chances the build memory gets too high
           # but in general this should never happen
           NODE_OPTIONS: '--max_old_space_size=4096'
+          # Used for API requests that require GitHub API scopes
+          NEXT_GITHUB_API_KEY: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Save Build Cache
-        # We want to store the Build Cache within Pull Requests or during pushes against the `main` branch
-        # since caches created on the `main` (default) branch can be reused on Pull Requests and PRs coming from forks
+      - name: Sync Orama Cloud
+        # We only want to sync the Orama Cloud production indexes on `push` events.
+        # We also want to sync the Orama Cloud preview (deployment) indexes on `pull_request_target` events.
+        # We also want to ensure that the sync only happens on the `ubuntu-latest` runner to avoid duplicate syncs
+        # or Windows-based path issues.
+        env:
+          ORAMA_INDEX_ID: ${{ github.event_name == 'push' && secrets.ORAMA_PRODUCTION_INDEX_ID || secrets.ORAMA_INDEX_ID }}
+          ORAMA_SECRET_KEY: ${{ github.event_name == 'push' && secrets.ORAMA_PRODUCTION_SECRET_KEY || secrets.ORAMA_SECRET_KEY }}
         if: |
-          github.event_name == 'push' || github.event_name == 'pull_request_target'
-        uses: actions/cache/save@704facf57e6136b1bc63b828d79edcd491f0ee84
-        with:
-          path: |
-            .turbo/cache
-            .next/cache
-            node_modules/.cache
-          # Most of sibling Pull Requests will use the cache key based on the package-lock.json
-          # We do also add a hashFiles for `.next/cache` as GitHub Actions only allows
-          # One cache with same key to exist, so to ensure we always have a cache from the latest build
-          # We add the hashFiles of `.next/cache` to the cache key of the Cache Entry
-          key: cache-build-${{ hashFiles('package-lock.json') }}-${{ hashFiles('.next/cache/**') }}
+          (matrix.os == 'ubuntu-latest') &&
+          ((github.event_name == 'push') || (github.event_name == 'pull_request_target'))
+        run: |
+          cd apps/site && npm run sync-orama
